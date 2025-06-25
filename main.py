@@ -1,30 +1,45 @@
-from fastapi import FastAPI, Request
-from typing import Dict, List
-from datetime import datetime
+from fastapi import FastAPI
+from pydantic import BaseModel
+from typing import List, Optional
+import datetime
 
-app = FastAPI()
+app = FastAPI(title="EduTextMx Dispatcher", version="0.1")
 
-# Simulación de nodos activos
 usb_nodes = {
-    "usb_001": {"status": "online", "last_seen": datetime.utcnow()},
-    "usb_002": {"status": "offline", "last_seen": None},
+    "usb_001": {"status": "online", "last_seen": str(datetime.datetime.now())},
+    "usb_002": {"status": "offline", "last_seen": None}
 }
 
+class TaskRequest(BaseModel):
+    url: str
+    priority: Optional[int] = 1
+
+class NodeStatus(BaseModel):
+    node_id: str
+    status: str
+    last_seen: Optional[str]
+
+class OCRResult(BaseModel):
+    raw_text: str
+    confidence: float
+    source_node: str
+    analysis_needed: bool
+
 @app.get("/health")
-def get_health():
-    return {"status": "Dispatcher running"}
+def health_check():
+    return {"status": "Dispatcher is running", "timestamp": str(datetime.datetime.now())}
 
 @app.post("/receive_task")
-async def receive_task(request: Request):
-    data = await request.json()
-    url = data.get("url")
-    return {"message": "Tarea recibida", "url": url}
+def receive_task(task: TaskRequest):
+    return {"message": "Task received", "url": task.url, "priority": task.priority}
 
-@app.get("/node_status")
-def node_status():
-    return usb_nodes
+@app.get("/node_status", response_model=List[NodeStatus])
+def get_node_status():
+    return [
+        {"node_id": node, "status": data["status"], "last_seen": data["last_seen"]}
+        for node, data in usb_nodes.items()
+    ]
 
 @app.post("/results")
-async def receive_results(request: Request):
-    data = await request.json()
-    return {"message": "Resultado recibido", "data": data}
+def receive_result(result: OCRResult):
+    return {"message": "Result received", "source": result.source_node}
